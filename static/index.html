@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V-SGC Route Optimizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#080a0f; --panel:#0d0f18; --surface:#13161f; --surface2:#1a1e2a;
+  --border:#252836; --border2:#2e3347;
+  --gold:#f0b429; --gold-d:rgba(240,180,41,.14);
+  --cyan:#00e5cc; --cyan-d:rgba(0,229,204,.12);
+  --red:#ff4757; --red-d:rgba(255,71,87,.14);
+  --green:#2ed573; --green-d:rgba(46,213,115,.12);
+  --purple:#a855f7;
+  --text:#e2e8f4; --text2:#8892a4; --muted:#4a5568;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;display:flex;flex-direction:column;height:100vh}
+body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.025) 2px,rgba(0,0,0,.025) 4px);pointer-events:none;z-index:9999}
+
+/* ── HEADER ── */
+header{display:flex;align-items:center;justify-content:space-between;padding:0 22px;height:52px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;z-index:100}
+.logo{display:flex;align-items:center;gap:11px}
+.logo-hex{width:30px;height:30px;background:var(--gold);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:13px;animation:hexPulse 3s ease infinite}
+@keyframes hexPulse{0%,100%{box-shadow:0 0 0 0 rgba(240,180,41,.4)}50%{box-shadow:0 0 0 8px rgba(240,180,41,0)}}
+.logo-text{font-family:'Bebas Neue',sans-serif;font-size:1.25rem;letter-spacing:3px;color:var(--gold)}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-size:.52rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.hchips{display:flex;align-items:center;gap:10px}
+.chip{display:flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:.58rem;letter-spacing:1px;text-transform:uppercase;color:var(--text2);background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:2px}
+.dot{width:5px;height:5px;border-radius:50%}
+.dot.g{background:var(--green);animation:blink 2s ease infinite}
+.dot.o{background:var(--gold)}
+.dot.c{background:var(--cyan)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── APP LAYOUT ── */
+.app{display:grid;grid-template-columns:340px 1fr 270px;flex:1;overflow:hidden;min-height:0}
+
+/* ── LEFT PANEL ── */
+.lp{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.ph{padding:13px 18px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.pt{font-family:'JetBrains Mono',monospace;font-size:.72rem;letter-spacing:3px;color:var(--text2);text-transform:uppercase}
+.pb{flex:1;overflow-y:auto;padding:14px 18px}
+.pb::-webkit-scrollbar{width:3px}
+.pb::-webkit-scrollbar-thumb{background:var(--border2)}
+
+label{display:block;font-family:'JetBrains Mono',monospace;font-size:.57rem;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+input,select{width:100%;background:var(--surface);border:1px solid var(--border2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.75rem;padding:8px 10px;outline:none;border-radius:2px;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none}
+input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(240,180,41,.1)}
+select option{background:var(--surface2)}
+.fg{margin-bottom:13px}
+.ir{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+
+.slbl{font-family:'JetBrains Mono',monospace;font-size:.56rem;letter-spacing:3px;text-transform:uppercase;color:var(--gold);padding:5px 0 8px;border-bottom:1px solid var(--border);margin-bottom:10px}
+
+/* Stop pills */
+.stop-list{display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto;margin-bottom:8px}
+.stop-list::-webkit-scrollbar{width:3px}
+.stop-list::-webkit-scrollbar-thumb{background:var(--border2)}
+.stop-pill{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);padding:7px 9px;border-radius:2px;animation:sin .2s ease;position:relative;overflow:hidden}
+.stop-pill::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--cyan)}
+@keyframes sin{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.snum{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--cyan);background:var(--cyan-d);width:18px;height:18px;display:flex;align-items:center;justify-content:center;border-radius:2px;flex-shrink:0;font-weight:700}
+.scoord{flex:1;font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sdem{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--gold);background:var(--gold-d);padding:2px 5px;border-radius:2px}
+.sdel{background:none;border:none;cursor:pointer;color:var(--muted);font-size:.85rem;transition:color .2s;padding:2px 3px;line-height:1}
+.sdel:hover{color:var(--red)}
+
+/* Buttons */
+.btn{width:100%;padding:9px 14px;font-family:'JetBrains Mono',monospace;font-size:.67rem;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border:none;border-radius:2px;transition:all .2s}
+.btn-demo{background:var(--gold-d);border:1px solid rgba(240,180,41,.4);color:var(--gold);margin-bottom:6px}
+.btn-demo:hover{background:rgba(240,180,41,.25)}
+.btn-add{background:var(--cyan-d);border:1px solid var(--cyan);color:var(--cyan);margin-bottom:7px}
+.btn-add:hover{background:rgba(0,229,204,.22);box-shadow:0 0 14px rgba(0,229,204,.25)}
+.btn-solve{background:var(--gold);color:#000;font-weight:700;margin-bottom:7px}
+.btn-solve:hover{background:#ffc83d;box-shadow:0 0 20px rgba(240,180,41,.4);transform:translateY(-1px)}
+.btn-solve:active{transform:translateY(0)}
+.btn-solve:disabled{background:var(--muted);color:#666;cursor:not-allowed;transform:none;box-shadow:none}
+.btn-rst{background:transparent;border:1px solid var(--border2);color:var(--muted)}
+.btn-rst:hover{border-color:var(--red);color:var(--red)}
+hr.div{border:none;border-top:1px solid var(--border);margin:12px 0}
+
+/* Mode toggle */
+.mode-row{display:flex;gap:6px;margin-bottom:9px}
+.mtbtn{flex:1;padding:6px;font-family:'JetBrains Mono',monospace;font-size:.58rem;letter-spacing:1px;text-transform:uppercase;cursor:pointer;border-radius:2px;background:var(--surface);border:1px solid var(--border2);color:var(--text2);transition:all .15s}
+.mtbtn:hover,.mtbtn.active{background:var(--gold-d);border-color:var(--gold);color:var(--gold)}
+
+/* Depot tabs */
+.depot-tabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px}
+.dep-tab{font-family:'JetBrains Mono',monospace;font-size:.58rem;padding:3px 8px;border-radius:2px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;transition:all .15s}
+.dep-tab.active{background:var(--gold-d);border-color:var(--gold);color:var(--gold)}
+.dep-tab .drem{margin-left:5px;opacity:.5}
+.dep-tab .drem:hover{opacity:1;color:var(--red)}
+
+/* Backend status */
+.backend-status{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);background:var(--surface);border-radius:2px;margin-bottom:10px;font-family:'JetBrains Mono',monospace;font-size:.6rem}
+.bs-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.bs-dot.ok{background:var(--green)}
+.bs-dot.err{background:var(--red)}
+.bs-dot.checking{background:var(--gold);animation:blink 1s ease infinite}
+
+/* ── CANVAS ── */
+.ca{position:relative;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+.ctbar{display:flex;align-items:center;justify-content:space-between;padding:8px 18px;border-bottom:1px solid var(--border);background:var(--panel);flex-shrink:0}
+.tl{display:flex;gap:6px;align-items:center}
+.tbtn{background:var(--surface);border:1px solid var(--border2);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:.58rem;letter-spacing:1px;padding:5px 10px;cursor:pointer;border-radius:2px;text-transform:uppercase;transition:all .15s}
+.tbtn:hover,.tbtn.active{border-color:var(--gold);color:var(--gold);background:var(--gold-d)}
+.mhint{font-family:'JetBrains Mono',monospace;font-size:.57rem;color:var(--muted);letter-spacing:1px}
+#rc{flex:1;cursor:crosshair;display:block}
+
+/* Overlay */
+.cov{position:absolute;inset:0;background:rgba(8,10,15,.88);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;opacity:0;pointer-events:none;transition:opacity .3s;backdrop-filter:blur(4px)}
+.cov.show{opacity:1;pointer-events:all}
+.cov-title{font-family:'Bebas Neue',sans-serif;font-size:2.2rem;letter-spacing:6px;color:var(--gold);animation:glitch 1.2s ease infinite}
+@keyframes glitch{0%,88%,100%{text-shadow:none}90%{text-shadow:2px 0 var(--cyan)}93%{text-shadow:-2px 0 var(--red)}}
+.cov-sub{font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:6px;letter-spacing:2px}
+.cov-bar{width:220px;height:2px;background:var(--border);margin-top:14px;border-radius:1px;overflow:hidden}
+.cov-fill{height:100%;background:var(--gold);animation:bf 1.4s ease infinite;border-radius:1px}
+@keyframes bf{0%{width:0}60%{width:80%}100%{width:100%}}
+.cov-phase{font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--gold);margin-top:10px;letter-spacing:1px;animation:fadePhase 0.5s ease}
+@keyframes fadePhase{from{opacity:0}to{opacity:1}}
+
+/* Canvas tooltip */
+.ctt{position:absolute;background:var(--surface);border:1px solid var(--border2);padding:7px 10px;font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--text);pointer-events:none;white-space:nowrap;z-index:20;display:none;border-radius:2px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+
+/* ── RIGHT PANEL ── */
+.rp{background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-bottom:1px solid var(--border);flex-shrink:0}
+.mbox{background:var(--panel);padding:12px 14px;text-align:center}
+.mv{font-family:'Bebas Neue',sans-serif;font-size:1.7rem;letter-spacing:1px;color:var(--gold);line-height:1;transition:all .4s}
+.mv.c{color:var(--cyan)}.mv.g{color:var(--green)}.mv.r{color:var(--red)}
+.ml{font-family:'JetBrains Mono',monospace;font-size:.52rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:2px}
+
+/* Algorithm badge */
+.algo-badge{padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--muted)}
+.algo-tag{background:var(--gold-d);border:1px solid rgba(240,180,41,.4);color:var(--gold);padding:2px 7px;border-radius:2px;letter-spacing:1px}
+
+/* Route sequence */
+.rseq{flex:1;overflow-y:auto;padding:12px 14px}
+.rseq::-webkit-scrollbar{width:3px}
+.rseq::-webkit-scrollbar-thumb{background:var(--border2)}
+.stitle{font-family:'JetBrains Mono',monospace;font-size:.56rem;letter-spacing:3px;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+.sempty{font-family:'JetBrains Mono',monospace;font-size:.62rem;color:var(--muted);text-align:center;padding:24px 0;line-height:1.9}
+.rblock{margin-bottom:10px}
+.rvlbl{font-family:'JetBrains Mono',monospace;font-size:.58rem;letter-spacing:2px;text-transform:uppercase;padding:5px 9px;margin-bottom:3px;display:flex;align-items:center;gap:7px;border-radius:2px}
+.vcol{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sstop{display:flex;align-items:flex-start;gap:7px;padding:5px 9px;border-left:2px solid var(--border2);margin-left:5px;font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--text2);line-height:1.4}
+.sstop.depot{border-left-color:var(--gold);color:var(--gold)}
+.sarrow{font-size:.45rem;color:var(--border2);margin-left:-2px}
+
+/* Log */
+.logp{border-top:1px solid var(--border);padding:10px 14px;flex-shrink:0;max-height:120px;overflow-y:auto}
+.logp::-webkit-scrollbar{width:3px}
+.logp::-webkit-scrollbar-thumb{background:var(--border2)}
+.ltitle{font-family:'JetBrains Mono',monospace;font-size:.52rem;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:7px}
+.lentry{font-family:'JetBrains Mono',monospace;font-size:.57rem;color:var(--muted);line-height:1.55;display:flex;gap:7px}
+.lt{color:var(--border2)}
+.lentry.info .lm{color:var(--text2)}
+.lentry.ok .lm{color:var(--green)}
+.lentry.warn .lm{color:var(--gold)}
+.lentry.err .lm{color:var(--red)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-hex">🚚</div>
+    <div>
+      <div class="logo-text">V-SGC Route Optimizer</div>
+      <div class="logo-sub">K-Means + MILP Grafting + TSPTW · ME4098D</div>
+    </div>
+  </div>
+  <div class="hchips">
+    <div class="chip"><div class="dot g"></div>V-SGC Engine</div>
+    <div class="chip" id="backendChip"><div class="dot o"></div>Connecting...</div>
+    <div class="chip"><div class="dot c"></div>scipy MILP Solver</div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- ── LEFT PANEL ── -->
+  <div class="lp">
+    <div class="ph"><div class="pt">⚙ Configuration</div></div>
+    <div class="pb">
+
+      <!-- Backend status -->
+      <div class="backend-status" id="bsBox">
+        <div class="bs-dot checking" id="bsDot"></div>
+        <span id="bsText">Checking backend at localhost:5050...</span>
+      </div>
+
+      <!-- Demos -->
+      <div class="slbl">Quick Start</div>
+      <button class="btn btn-demo" onclick="loadDemo('small')">▶ Small Demo — 5 stops</button>
+      <button class="btn btn-demo" onclick="loadDemo('medium')">▶ Medium Demo — 12 stops</button>
+      <button class="btn btn-demo" onclick="loadDemo('large')">▶ Large Demo — 20 stops</button>
+
+      <hr class="div">
+
+      <!-- Depots -->
+      <div class="slbl">Depots</div>
+      <div class="depot-tabs" id="depotTabs"></div>
+      <div class="ir" style="margin-bottom:6px">
+        <div class="fg" style="margin-bottom:0">
+          <label>Depot Name</label>
+          <input id="dName" value="Main Depot" placeholder="Depot name">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <div class="fg" style="margin-bottom:0"><label>X</label><input type="number" id="dX" value="50" min="0" max="100" step=".5"></div>
+          <div class="fg" style="margin-bottom:0"><label>Y</label><input type="number" id="dY" value="50" min="0" max="100" step=".5"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button class="btn btn-add" style="margin-bottom:0" onclick="addDepot()">+ Add Depot</button>
+        <button class="btn btn-add" style="margin-bottom:0;background:var(--gold-d);border-color:var(--gold);color:var(--gold)" onclick="updateSelectedDepot()">✎ Update</button>
+      </div>
+
+      <hr class="div">
+
+      <!-- Vehicle params -->
+      <div class="slbl">Vehicle Parameters</div>
+      <div class="ir">
+        <div class="fg"><label>Vehicles</label><input type="number" id="nVeh" value="3" min="1" max="20"></div>
+        <div class="fg"><label>Capacity/Vehicle</label><input type="number" id="vCap" value="100" min="10" max="1000"></div>
+      </div>
+      <div class="ir">
+        <div class="fg"><label>Speed (km/h)</label><input type="number" id="spd" value="30" min="5" max="120"></div>
+        <div class="fg"><label>MILP Time Limit (s)</label><input type="number" id="milpTL" value="30" min="5" max="300"></div>
+      </div>
+
+      <hr class="div">
+
+      <!-- Stops -->
+      <div class="slbl">Delivery Stops</div>
+      <div class="mode-row">
+        <button class="mtbtn active" id="btnClick" onclick="setMode('click')">🖱 Click Map</button>
+        <button class="mtbtn" id="btnManual" onclick="setMode('manual')">✏ Manual</button>
+      </div>
+
+      <!-- Click mode -->
+      <div id="clickMode">
+        <div class="ir" style="margin-bottom:8px">
+          <div class="fg" style="margin-bottom:0"><label>Default Demand</label><input type="number" id="defDem" value="10" min="1" max="500"></div>
+          <div class="fg" style="margin-bottom:0"><label>Label (optional)</label><input type="text" id="nxtLbl" placeholder="Auto"></div>
+        </div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:.58rem;color:var(--muted);margin-bottom:8px;line-height:1.6">
+          👆 Click map to place stops · Right-click to move depot
+        </div>
+      </div>
+
+      <!-- Manual mode -->
+      <div id="manualMode" style="display:none">
+        <div class="ir" style="margin-bottom:5px">
+          <div class="fg" style="margin-bottom:0"><label>X (0–100)</label><input type="number" id="mX" placeholder="e.g. 35" min="0" max="100" step=".5"></div>
+          <div class="fg" style="margin-bottom:0"><label>Y (0–100)</label><input type="number" id="mY" placeholder="e.g. 60" min="0" max="100" step=".5"></div>
+        </div>
+        <div class="ir" style="margin-bottom:8px">
+          <div class="fg" style="margin-bottom:0"><label>Demand (units)</label><input type="number" id="mDem" value="10" min="1" max="500"></div>
+          <div class="fg" style="margin-bottom:0"><label>Label</label><input type="text" id="mLbl" placeholder="e.g. Shop A"></div>
+        </div>
+        <div class="ir" style="margin-bottom:5px">
+          <div class="fg" style="margin-bottom:0"><label>Time Window Start</label><input type="number" id="mTe" value="0" min="0" max="1440"></div>
+          <div class="fg" style="margin-bottom:0"><label>Time Window End</label><input type="number" id="mTl" value="480" min="0" max="1440"></div>
+        </div>
+        <button class="btn btn-add" onclick="addManual()">+ Add Stop</button>
+      </div>
+
+      <!-- Stops list -->
+      <div class="stop-list" id="stopList"></div>
+      <div id="noStops" style="font-family:'JetBrains Mono',monospace;font-size:.6rem;color:var(--muted);text-align:center;padding:8px 0">No stops added</div>
+
+      <hr class="div">
+
+      <button class="btn btn-solve" id="solveBtn" onclick="solve()">⚡ RUN V-SGC MILP SOLVER</button>
+      <button class="btn btn-rst" onclick="resetAll()">✕ Reset</button>
+    </div>
+  </div>
+
+  <!-- ── CANVAS ── -->
+  <div class="ca">
+    <div class="ctbar">
+      <div class="tl">
+        <button class="tbtn active" id="bPlace" onclick="setTool('place')">📍 Place</button>
+        <button class="tbtn" id="bPan" onclick="setTool('pan')">✋ Pan</button>
+        <button class="tbtn" onclick="zoom(1.2)">＋</button>
+        <button class="tbtn" onclick="zoom(0.83)">－</button>
+        <button class="tbtn" onclick="fitView()">⊡ Fit</button>
+      </div>
+      <div class="mhint" id="mHint">Click to place stops · Right-click to reposition depot</div>
+    </div>
+    <canvas id="rc"></canvas>
+    <div class="cov" id="cov">
+      <div class="cov-title">SOLVING</div>
+      <div class="cov-sub">V-SGC MILP ENGINE RUNNING</div>
+      <div class="cov-bar"><div class="cov-fill"></div></div>
+      <div class="cov-phase" id="covPhase">Initialising K-Means seeding...</div>
+    </div>
+    <div class="ctt" id="ctt"></div>
+  </div>
+
+  <!-- ── RIGHT PANEL ── -->
+  <div class="rp">
+    <div class="metrics">
+      <div class="mbox"><div class="mv" id="mDist">—</div><div class="ml">Total Distance</div></div>
+      <div class="mbox"><div class="mv c" id="mRts">—</div><div class="ml">Routes</div></div>
+      <div class="mbox"><div class="mv g" id="mStp">0</div><div class="ml">Stops</div></div>
+      <div class="mbox"><div class="mv" id="mUtil">—</div><div class="ml">Avg Utilization</div></div>
+    </div>
+    <div class="algo-badge">
+      <span class="algo-tag">V-SGC</span>
+      K-Means → MILP Cluster → TSPTW Route
+    </div>
+    <div class="rseq" id="rseq">
+      <div class="stitle">▸ Route Sequence</div>
+      <div class="sempty" id="seqEmpty">No routes yet.<br>Add stops &amp; click<br>RUN V-SGC SOLVER.</div>
+    </div>
+    <div class="logp">
+      <div class="ltitle">▸ Solver Log</div>
+      <div id="logC"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════
+const API = "http://localhost:5050/api";
+const VCOLS = ['#f0b429','#00e5cc','#a855f7','#ff4757','#2ed573','#ff6b35','#00b8d9','#e91e63','#4caf50','#ff9800'];
+
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+const S = {
+  stops: [], depots: [{x:50,y:50,name:'Main Depot'}],
+  selectedDepot: 0,
+  routes: [], computed: false,
+  mode:'click', tool:'place',
+  zoom:1, panX:0, panY:0,
+  dragging:false, dragStart:null,
+  hovered:-1, stopCounter:1,
+  backendOk: false
+};
+
+// ══════════════════════════════════════════════
+//  CANVAS
+// ══════════════════════════════════════════════
+const canvas = document.getElementById('rc');
+const ctx = canvas.getContext('2d');
+
+function resize() {
+  const area = canvas.parentElement;
+  const bar = canvas.previousElementSibling;
+  canvas.width = area.clientWidth;
+  canvas.height = area.clientHeight - bar.offsetHeight;
+  draw();
+}
+window.addEventListener('resize', resize);
+resize();
+
+function w2s(wx, wy) {
+  const pad=55, w=canvas.width-pad*2, h=canvas.height-pad*2;
+  const cx=canvas.width/2+S.panX, cy=canvas.height/2+S.panY;
+  return {x: cx+(wx-50)*(w/100)*S.zoom, y: cy+(wy-50)*(h/100)*S.zoom};
+}
+function s2w(sx, sy) {
+  const pad=55, w=canvas.width-pad*2, h=canvas.height-pad*2;
+  const cx=canvas.width/2+S.panX, cy=canvas.height/2+S.panY;
+  return {x:(sx-cx)/((w/100)*S.zoom)+50, y:(sy-cy)/((h/100)*S.zoom)+50};
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawGrid();
+  if (S.computed) S.routes.forEach((r,i)=>drawRoute(r,VCOLS[i%VCOLS.length]));
+  S.stops.forEach((s,i)=>drawStop(s,i));
+  S.depots.forEach((d,i)=>drawDepot(d,i));
+}
+
+function drawGrid() {
+  ctx.save();
+  ctx.strokeStyle='rgba(37,40,54,.7)';
+  ctx.lineWidth=1;
+  for(let g=0;g<=10;g++){
+    const p1=w2s(g*10,0),p2=w2s(g*10,100);
+    ctx.beginPath();ctx.moveTo(p1.x,p1.y);ctx.lineTo(p2.x,p2.y);ctx.stroke();
+    const q1=w2s(0,g*10),q2=w2s(100,g*10);
+    ctx.beginPath();ctx.moveTo(q1.x,q1.y);ctx.lineTo(q2.x,q2.y);ctx.stroke();
+  }
+  ctx.fillStyle='rgba(74,85,104,.6)';ctx.font='9px JetBrains Mono,monospace';
+  ctx.textAlign='center';
+  for(let g=0;g<=10;g++){const p=w2s(g*10,100);ctx.fillText(g*10,p.x,p.y+14);}
+  ctx.textAlign='right';
+  for(let g=0;g<=10;g++){const p=w2s(0,g*10);ctx.fillText(g*10,p.x-6,p.y+4);}
+  ctx.restore();
+}
+
+function drawRoute(route, color) {
+  if (!route.stops_coords || route.stops_coords.length===0) return;
+  const dep = S.depots[route.depot_idx||0];
+  const seq = [{x:dep.x,y:dep.y}, ...route.stops_coords, {x:dep.x,y:dep.y}];
+  ctx.save();
+  ctx.strokeStyle=color; ctx.lineWidth=2.5;
+  ctx.shadowColor=color; ctx.shadowBlur=10; ctx.globalAlpha=.82;
+  ctx.beginPath();
+  seq.forEach((pt,i)=>{const p=w2s(pt.x,pt.y);i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y)});
+  ctx.stroke();
+  // arrows
+  ctx.shadowBlur=0; ctx.globalAlpha=.9;
+  for(let i=0;i<seq.length-1;i++){
+    const a=w2s(seq[i].x,seq[i].y),b=w2s(seq[i+1].x,seq[i+1].y);
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    const len=Math.hypot(b.x-a.x,b.y-a.y);
+    if(len>28){
+      const ang=Math.atan2(b.y-a.y,b.x-a.x);
+      ctx.fillStyle=color;
+      ctx.beginPath();
+      ctx.translate(mx,my);ctx.rotate(ang);
+      ctx.moveTo(0,0);ctx.lineTo(-7,-3.5);ctx.lineTo(-7,3.5);
+      ctx.closePath();ctx.fill();
+      ctx.setTransform(1,0,0,1,0,0);
+    }
+  }
+  ctx.restore();
+}
+
+function getStopColor(idx) {
+  if (!S.computed) return null;
+  for(let i=0;i<S.routes.length;i++){
+    if(S.routes[i].stops.includes(idx)) return VCOLS[i%VCOLS.length];
+  }
+  return '#4a5568';
+}
+
+function drawStop(stop, idx) {
+  const p=w2s(stop.x,stop.y);
+  const hov=S.hovered===idx, r=hov?10:8;
+  const vc=getStopColor(idx);
+  ctx.save();
+  if(hov){ctx.shadowColor=vc||'#00e5cc';ctx.shadowBlur=18;}
+  ctx.fillStyle=vc||'#1a1e2a';
+  ctx.strokeStyle=vc||'#00e5cc';
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x,p.y,2.5,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.fillStyle=hov?'#fff':'rgba(226,232,244,.85)';
+  ctx.font=`bold ${hov?11:10}px JetBrains Mono,monospace`;
+  ctx.textAlign='center';
+  ctx.fillText(stop.label||`S${idx+1}`,p.x,p.y-r-4);
+  ctx.font='9px JetBrains Mono,monospace';
+  ctx.fillStyle='rgba(240,180,41,.9)';
+  ctx.fillText(`${stop.demand}u`,p.x,p.y+r+11);
+  ctx.restore();
+}
+
+function drawDepot(dep, idx) {
+  const p=w2s(dep.x,dep.y);
+  const isSel=S.selectedDepot===idx;
+  const color=isSel?'#f0b429':'#8892a4';
+  ctx.save();
+  ctx.shadowColor=color; ctx.shadowBlur=isSel?20:8;
+  ctx.strokeStyle=color; ctx.lineWidth=isSel?2:1.5;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.arc(p.x,p.y,17,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=color;
+  ctx.fillRect(p.x-9,p.y-9,18,18);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#000';
+  ctx.font='bold 11px Arial';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('D'+(S.depots.length>1?idx+1:''),p.x,p.y);
+  ctx.textBaseline='alphabetic';
+  ctx.fillStyle=color;
+  ctx.font=`bold ${isSel?11:10}px JetBrains Mono,monospace`;
+  ctx.fillText(dep.name,p.x,p.y-21);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════
+//  CANVAS EVENTS
+// ══════════════════════════════════════════════
+canvas.addEventListener('click', e=>{
+  if(S.tool!=='place'||S.mode!=='click') return;
+  const rect=canvas.getBoundingClientRect();
+  const w=s2w(e.clientX-rect.left,e.clientY-rect.top);
+  if(w.x<0||w.x>100||w.y<0||w.y>100) return;
+  const demand=parseInt(document.getElementById('defDem').value)||10;
+  const rawLbl=document.getElementById('nxtLbl').value.trim();
+  const label=rawLbl||`S${S.stopCounter}`;
+  S.stops.push({x:+w.x.toFixed(1),y:+w.y.toFixed(1),demand,label,time_earliest:0,time_latest:1440});
+  S.stopCounter++; S.computed=false;
+  document.getElementById('nxtLbl').value='';
+  updateList(); updateMetrics(); draw();
+  log(`Stop placed: ${label} (${w.x.toFixed(1)},${w.y.toFixed(1)}) demand=${demand}`,'info');
+});
+
+canvas.addEventListener('contextmenu', e=>{
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const w=s2w(e.clientX-rect.left,e.clientY-rect.top);
+  S.depots[S.selectedDepot].x=+w.x.toFixed(1);
+  S.depots[S.selectedDepot].y=+w.y.toFixed(1);
+  document.getElementById('dX').value=S.depots[S.selectedDepot].x;
+  document.getElementById('dY').value=S.depots[S.selectedDepot].y;
+  S.computed=false; draw();
+  log(`Depot "${S.depots[S.selectedDepot].name}" moved to (${w.x.toFixed(1)},${w.y.toFixed(1)})`,'warn');
+});
+
+canvas.addEventListener('mousedown', e=>{
+  if(S.tool==='pan'||e.button===1){
+    S.dragging=true; S.dragStart={x:e.clientX-S.panX,y:e.clientY-S.panY};
+    canvas.style.cursor='grabbing';
+  }
+});
+canvas.addEventListener('mousemove', e=>{
+  const rect=canvas.getBoundingClientRect();
+  const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  if(S.dragging){S.panX=e.clientX-S.dragStart.x;S.panY=e.clientY-S.dragStart.y;draw();return;}
+  let hov=-1;
+  S.stops.forEach((s,i)=>{const p=w2s(s.x,s.y);if(Math.hypot(mx-p.x,my-p.y)<13)hov=i;});
+  if(hov!==S.hovered){S.hovered=hov;draw();}
+  const tt=document.getElementById('ctt');
+  if(hov>=0){
+    const s=S.stops[hov];
+    tt.innerHTML=`<strong>${s.label}</strong><br>X:${s.x}  Y:${s.y}<br>Demand: ${s.demand}u<br>TW: ${s.time_earliest}–${s.time_latest}`;
+    tt.style.display='block';tt.style.left=(mx+14)+'px';tt.style.top=(my-8)+'px';
+  } else {tt.style.display='none';}
+});
+canvas.addEventListener('mouseup',()=>{S.dragging=false;canvas.style.cursor=S.tool==='pan'?'grab':'crosshair';});
+canvas.addEventListener('mouseleave',()=>{S.dragging=false;document.getElementById('ctt').style.display='none';});
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?0.9:1.11);},{passive:false});
+
+function zoom(f){S.zoom=Math.max(.3,Math.min(6,S.zoom*f));draw();}
+function fitView(){S.zoom=1;S.panX=0;S.panY=0;draw();}
+function setTool(t){
+  S.tool=t;
+  document.getElementById('bPlace').classList.toggle('active',t==='place');
+  document.getElementById('bPan').classList.toggle('active',t==='pan');
+  canvas.style.cursor=t==='pan'?'grab':'crosshair';
+}
+function setMode(m){
+  S.mode=m;
+  document.getElementById('clickMode').style.display=m==='click'?'block':'none';
+  document.getElementById('manualMode').style.display=m==='manual'?'block':'none';
+  document.getElementById('btnClick').classList.toggle('active',m==='click');
+  document.getElementById('btnManual').classList.toggle('active',m==='manual');
+}
+
+// ══════════════════════════════════════════════
+//  DEPOT MANAGEMENT
+// ══════════════════════════════════════════════
+function renderDepotTabs() {
+  const tabs=document.getElementById('depotTabs');
+  tabs.innerHTML='';
+  S.depots.forEach((d,i)=>{
+    const btn=document.createElement('button');
+    btn.className='dep-tab'+(i===S.selectedDepot?' active':'');
+    btn.innerHTML=`D${i+1}: ${d.name}${S.depots.length>1?`<span class="drem" onclick="removeDepot(${i},event)">✕</span>`:''}`;
+    btn.onclick=()=>{S.selectedDepot=i;renderDepotTabs();loadDepotToForm(i);draw();};
+    tabs.appendChild(btn);
+  });
+}
+function loadDepotToForm(i){
+  document.getElementById('dName').value=S.depots[i].name;
+  document.getElementById('dX').value=S.depots[i].x;
+  document.getElementById('dY').value=S.depots[i].y;
+}
+function addDepot(){
+  const name=document.getElementById('dName').value||`Depot ${S.depots.length+1}`;
+  const x=parseFloat(document.getElementById('dX').value)||50;
+  const y=parseFloat(document.getElementById('dY').value)||50;
+  S.depots.push({x,y,name});
+  S.selectedDepot=S.depots.length-1;
+  renderDepotTabs(); S.computed=false; draw();
+  log(`Depot added: ${name} at (${x},${y})`,'info');
+}
+function updateSelectedDepot(){
+  S.depots[S.selectedDepot].name=document.getElementById('dName').value||S.depots[S.selectedDepot].name;
+  S.depots[S.selectedDepot].x=parseFloat(document.getElementById('dX').value)||S.depots[S.selectedDepot].x;
+  S.depots[S.selectedDepot].y=parseFloat(document.getElementById('dY').value)||S.depots[S.selectedDepot].y;
+  renderDepotTabs(); S.computed=false; draw();
+  log(`Depot updated`,'info');
+}
+function removeDepot(i,e){
+  e.stopPropagation();
+  if(S.depots.length<=1){log('At least one depot required','err');return;}
+  S.depots.splice(i,1);
+  S.selectedDepot=Math.min(S.selectedDepot,S.depots.length-1);
+  renderDepotTabs(); S.computed=false; draw();
+}
+renderDepotTabs();
+
+// ══════════════════════════════════════════════
+//  STOP MANAGEMENT
+// ══════════════════════════════════════════════
+function addManual(){
+  const x=parseFloat(document.getElementById('mX').value);
+  const y=parseFloat(document.getElementById('mY').value);
+  const dem=parseInt(document.getElementById('mDem').value)||10;
+  const lbl=document.getElementById('mLbl').value.trim()||`S${S.stopCounter}`;
+  const te=parseInt(document.getElementById('mTe').value)||0;
+  const tl=parseInt(document.getElementById('mTl').value)||1440;
+  if(isNaN(x)||isNaN(y)||x<0||x>100||y<0||y>100){log('Invalid coords (0–100)','err');return;}
+  S.stops.push({x,y,demand:dem,label:lbl,time_earliest:te,time_latest:tl});
+  S.stopCounter++; S.computed=false;
+  document.getElementById('mX').value='';document.getElementById('mY').value='';
+  document.getElementById('mLbl').value='';
+  updateList();updateMetrics();draw();
+  log(`Stop added: ${lbl} (${x},${y}) demand=${dem} TW:${te}–${tl}`,'info');
+}
+function removeStop(i){S.stops.splice(i,1);S.computed=false;updateList();updateMetrics();draw();}
+function updateList(){
+  const lst=document.getElementById('stopList');
+  const none=document.getElementById('noStops');
+  lst.innerHTML='';
+  none.style.display=S.stops.length===0?'block':'none';
+  document.getElementById('mStp').textContent=S.stops.length;
+  S.stops.forEach((s,i)=>{
+    const d=document.createElement('div');d.className='stop-pill';
+    d.innerHTML=`<div class="snum">${i+1}</div><div class="scoord">${s.label} (${s.x},${s.y})</div><div class="sdem">${s.demand}u</div><button class="sdel" onclick="removeStop(${i})">✕</button>`;
+    lst.appendChild(d);
+  });
+}
+function updateMetrics(){
+  document.getElementById('mStp').textContent=S.stops.length;
+  if(!S.computed||!S.routes.length){document.getElementById('mDist').textContent='—';document.getElementById('mRts').textContent='—';document.getElementById('mUtil').textContent='—';return;}
+  const td=S.routes.reduce((s,r)=>s+r.distance,0);
+  const au=S.routes.reduce((s,r)=>s+r.utilization,0)/S.routes.length;
+  document.getElementById('mDist').textContent=td.toFixed(1);
+  document.getElementById('mRts').textContent=S.routes.length;
+  document.getElementById('mUtil').textContent=au.toFixed(0)+'%';
+}
+
+// ══════════════════════════════════════════════
+//  V-SGC SOLVER
+// ══════════════════════════════════════════════
+const phases=['Initialising K-Means seeding...','Running K-Means++ clustering...','Building MILP formulation (V-SGC)...','Solving MILP with CBC solver...','Assigning clusters to depots...','Running TSPTW routing per cluster...','Extracting optimal routes...'];
+let phaseIdx=0,phaseTimer=null;
+
+function nextPhase(){
+  phaseIdx++;
+  if(phaseIdx<phases.length){
+    document.getElementById('covPhase').textContent=phases[phaseIdx];
+    phaseTimer=setTimeout(nextPhase,1200+Math.random()*800);
+  }
+}
+
+async function solve(){
+  if(S.stops.length===0){log('No stops added','err');return;}
+  if(!S.backendOk){log('Backend not connected. Start the Python server first.','err');return;}
+
+  // Update depots from form
+  updateSelectedDepot();
+
+  const btn=document.getElementById('solveBtn');
+  btn.disabled=true;
+  document.getElementById('cov').classList.add('show');
+  phaseIdx=0;
+  document.getElementById('covPhase').textContent=phases[0];
+  phaseTimer=setTimeout(nextPhase,1200);
+  log('Sending to V-SGC MILP backend...','info');
+
+  const payload={
+    customers: S.stops,
+    depots: S.depots,
+    num_vehicles: parseInt(document.getElementById('nVeh').value)||3,
+    vehicle_capacity: parseInt(document.getElementById('vCap').value)||100,
+    speed_kmh: parseFloat(document.getElementById('spd').value)||30,
+    milp_time_limit: parseFloat(document.getElementById('milpTL').value)||30
+  };
+
+  try {
+    const resp=await fetch(`${API}/solve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await resp.json();
+
+    clearTimeout(phaseTimer);
+    document.getElementById('cov').classList.remove('show');
+    btn.disabled=false;
+
+    if(!resp.ok||data.error){log('Solver error: '+(data.error||'unknown'),'err');return;}
+
+    // Enrich routes with coords for drawing
+    S.routes=data.routes.map(r=>({
+      ...r,
+      stops_coords: r.stops.map(i=>({x:S.stops[i].x,y:S.stops[i].y}))
+    }));
+    S.computed=true;
+
+    updateMetrics();
+    renderRoutePanel(data);
+    draw();
+
+    // Log solver output
+    if(data.log) data.log.forEach(l=>log(l,'ok'));
+    log(`Status: ${data.summary.algorithm}`,'ok');
+
+  } catch(err){
+    clearTimeout(phaseTimer);
+    document.getElementById('cov').classList.remove('show');
+    btn.disabled=false;
+    log('Network error: '+err.message+'. Is the Python server running?','err');
+  }
+}
+
+function renderRoutePanel(data){
+  const panel=document.getElementById('rseq');
+  document.getElementById('seqEmpty').style.display='none';
+  document.querySelectorAll('.rblock').forEach(e=>e.remove());
+  const cap=parseInt(document.getElementById('vCap').value)||100;
+  const spd=parseFloat(document.getElementById('spd').value)||30;
+
+  data.routes.forEach((route,ri)=>{
+    const color=VCOLS[ri%VCOLS.length];
+    const dep=S.depots[route.depot_idx||0];
+    const tmin=Math.round(route.distance/spd*60);
+    const block=document.createElement('div');
+    block.className='rblock';
+
+    let html=`<div class="rvlbl" style="background:${color}22;border:1px solid ${color}55;color:${color}">
+      <div class="vcol" style="background:${color}"></div>
+      Vehicle ${route.vehicle}
+      <span style="margin-left:auto;font-size:.52rem;color:${color}99">${route.utilization}% load · ~${tmin}min · ${route.distance.toFixed(1)} units</span>
+    </div>`;
+
+    html+=`<div class="sstop depot">🏭 ${dep.name} (start)</div>`;
+    route.stops.forEach(si=>{
+      const s=S.stops[si];
+      html+=`<div class="sarrow" style="margin-left:13px;color:${color}66">│</div>
+      <div class="sstop" style="border-left-color:${color}55">📍 ${s.label} · (${s.x},${s.y}) · ${s.demand}u</div>`;
+    });
+    html+=`<div class="sarrow" style="margin-left:13px;color:${color}66">│</div>
+    <div class="sstop depot" style="color:${color}">🏭 ${dep.name} (return)</div>`;
+
+    block.innerHTML=html;
+    panel.appendChild(block);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  DEMOS
+// ══════════════════════════════════════════════
+const DEMOS={
+  small:{
+    depots:[{x:50,y:50,name:'Central Hub'}],
+    stops:[
+      {x:25,y:22,demand:15,label:'Shop A',time_earliest:60,time_latest:240},
+      {x:72,y:18,demand:20,label:'Shop B',time_earliest:0,time_latest:300},
+      {x:80,y:68,demand:12,label:'Shop C',time_earliest:120,time_latest:360},
+      {x:22,y:77,demand:18,label:'Shop D',time_earliest:0,time_latest:480},
+      {x:60,y:85,demand:10,label:'Shop E',time_earliest:60,time_latest:420}
+    ],
+    nVeh:2,cap:50
+  },
+  medium:{
+    depots:[{x:48,y:52,name:'Main Depot'},{x:15,y:15,name:'North Hub'}],
+    stops:[
+      {x:20,y:15,demand:12,label:'Z1-A',time_earliest:0,time_latest:480},
+      {x:35,y:10,demand:8,label:'Z1-B',time_earliest:60,time_latest:360},
+      {x:65,y:12,demand:15,label:'Z2-A',time_earliest:0,time_latest:480},
+      {x:80,y:20,demand:20,label:'Z2-B',time_earliest:120,time_latest:420},
+      {x:85,y:45,demand:10,label:'Z3-A',time_earliest:0,time_latest:480},
+      {x:75,y:75,demand:18,label:'Z3-B',time_earliest:60,time_latest:480},
+      {x:60,y:88,demand:14,label:'Z4-A',time_earliest:0,time_latest:360},
+      {x:40,y:90,demand:9,label:'Z4-B',time_earliest:120,time_latest:480},
+      {x:15,y:80,demand:16,label:'Z5-A',time_earliest:0,time_latest:480},
+      {x:10,y:55,demand:11,label:'Z5-B',time_earliest:60,time_latest:420},
+      {x:15,y:30,demand:13,label:'Z6-A',time_earliest:0,time_latest:480},
+      {x:50,y:20,demand:7,label:'Z6-B',time_earliest:0,time_latest:360}
+    ],
+    nVeh:3,cap:60
+  },
+  large:{
+    depots:[{x:50,y:48,name:'Distribution Center'},{x:20,y:20,name:'NW Depot'},{x:80,y:80,name:'SE Depot'}],
+    stops:[
+      {x:15,y:10,demand:8,label:'L1',time_earliest:0,time_latest:480},{x:30,y:8,demand:12,label:'L2',time_earliest:60,time_latest:420},
+      {x:55,y:5,demand:15,label:'L3',time_earliest:0,time_latest:480},{x:72,y:12,demand:9,label:'L4',time_earliest:120,time_latest:480},
+      {x:88,y:22,demand:11,label:'L5',time_earliest:0,time_latest:360},{x:92,y:45,demand:20,label:'L6',time_earliest:60,time_latest:480},
+      {x:85,y:65,demand:14,label:'L7',time_earliest:0,time_latest:480},{x:75,y:82,demand:10,label:'L8',time_earliest:0,time_latest:420},
+      {x:58,y:91,demand:17,label:'L9',time_earliest:120,time_latest:480},{x:40,y:93,demand:8,label:'L10',time_earliest:0,time_latest:480},
+      {x:22,y:85,demand:13,label:'L11',time_earliest:60,time_latest:480},{x:8,y:70,demand:19,label:'L12',time_earliest:0,time_latest:360},
+      {x:5,y:50,demand:11,label:'L13',time_earliest:0,time_latest:480},{x:10,y:30,demand:16,label:'L14',time_earliest:0,time_latest:480},
+      {x:20,y:15,demand:9,label:'L15',time_earliest:60,time_latest:420},{x:38,y:30,demand:14,label:'L16',time_earliest:0,time_latest:480},
+      {x:62,y:28,demand:12,label:'L17',time_earliest:0,time_latest:360},{x:70,y:55,demand:18,label:'L18',time_earliest:120,time_latest:480},
+      {x:55,y:70,demand:10,label:'L19',time_earliest:0,time_latest:480},{x:35,y:65,demand:15,label:'L20',time_earliest:60,time_latest:420}
+    ],
+    nVeh:4,cap:80
+  }
+};
+
+function loadDemo(sz){
+  resetAll(true);
+  const d=DEMOS[sz];
+  S.depots=d.stops?d.depots.map(dep=>({...dep})):[];
+  if(!S.depots.length) S.depots=[{x:50,y:50,name:'Depot'}];
+  S.stops=d.stops.map(s=>({...s}));
+  S.stopCounter=S.stops.length+1;
+  S.selectedDepot=0;
+  document.getElementById('nVeh').value=d.nVeh;
+  document.getElementById('vCap').value=d.cap;
+  renderDepotTabs();loadDepotToForm(0);
+  updateList();updateMetrics();draw();
+  log(`Demo loaded: ${sz} (${S.stops.length} stops, ${S.depots.length} depot(s))`,'ok');
+}
+
+function resetAll(silent=false){
+  S.stops=[];S.routes=[];S.computed=false;S.stopCounter=1;
+  S.depots=[{x:50,y:50,name:'Main Depot'}];S.selectedDepot=0;
+  S.panX=0;S.panY=0;S.zoom=1;
+  document.getElementById('mDist').textContent='—';
+  document.getElementById('mRts').textContent='—';
+  document.getElementById('mStp').textContent='0';
+  document.getElementById('mUtil').textContent='—';
+  document.getElementById('seqEmpty').style.display='block';
+  document.querySelectorAll('.rblock').forEach(e=>e.remove());
+  renderDepotTabs();loadDepotToForm(0);updateList();draw();
+  if(!silent) log('Reset complete','warn');
+}
+
+// ══════════════════════════════════════════════
+//  BACKEND HEALTH CHECK
+// ══════════════════════════════════════════════
+async function checkBackend(){
+  const dot=document.getElementById('bsDot');
+  const txt=document.getElementById('bsText');
+  const chip=document.getElementById('backendChip');
+  try{
+    const r=await fetch(`${API}/health`,{signal:AbortSignal.timeout(3000)});
+    const d=await r.json();
+    dot.className='bs-dot ok';
+    txt.textContent='Backend connected · '+d.solver;
+    chip.innerHTML='<div class="dot g"></div>Backend Online';
+    S.backendOk=true;
+    log('Backend connected: '+d.algorithm,'ok');
+  } catch(e){
+    dot.className='bs-dot err';
+    txt.textContent='Backend offline — start server: python app.py';
+    chip.innerHTML='<div class="dot" style="background:var(--red)"></div>Backend Offline';
+    S.backendOk=false;
+    log('Backend not reachable at localhost:5050','err');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  LOGGING
+// ══════════════════════════════════════════════
+function log(msg,type='info'){
+  const c=document.getElementById('logC');
+  const now=new Date();
+  const t=`${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+  const el=document.createElement('div');
+  el.className=`lentry ${type}`;
+  el.innerHTML=`<span class="lt">${t}</span><span class="lm">${msg}</span>`;
+  c.appendChild(el);
+  c.scrollTop=c.scrollHeight;
+  while(c.children.length>40) c.removeChild(c.firstChild);
+}
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+setMode('click');setTool('place');
+checkBackend();
+setInterval(checkBackend,15000);
+log('V-SGC Route Optimizer ready','ok');
+log('Start backend: python backend/app.py','info');
+draw();
+</script>
+</body>
+</html>
