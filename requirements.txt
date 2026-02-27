@@ -1,0 +1,8 @@
+# V-SGC Route Optimizer — Python Backend Dependencies
+flask>=2.3.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Optional: Install Gurobi separately for production MILP solving
+# pip install gurobipy   (requires Gurobi license)
+# scipy.optimize.milp uses the open-source HiGHS solver by default (no license needed)
